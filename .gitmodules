@@ -1,0 +1,8 @@
+[submodule "uima-conll-export"]
+	path = uima-conll-export
+	url = https://github.com/m-stoeckel/uima-conll-export.git
+	branch = master
+[submodule "biofid-gazetteer"]
+	path = biofid-gazetteer
+	url = https://github.com/m-stoeckel/biofid-gazetteer
+	branch = master
