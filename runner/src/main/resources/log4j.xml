@@ -8,22 +8,22 @@
             <param name="ConversionPattern" value="%d{HH:mm:ss.SSS} %5p [%t] (%F:%L) - %m%n"/>
         </layout>
         <filter class="org.apache.log4j.filter.StringMatchFilter">
-            <param name="StringToMatch" value="Import by name" />
+            <param name="StringToMatch" value="Import by name"/>
             <param name="AcceptOnMatch" value="false"/>
         </filter>
         <filter class="org.apache.log4j.filter.StringMatchFilter">
-            <param name="StringToMatch" value="Import by location" />
+            <param name="StringToMatch" value="Import by location"/>
             <param name="AcceptOnMatch" value="false"/>
         </filter>
         <filter class="org.apache.log4j.filter.StringMatchFilter">
-            <param name="StringToMatch" value="Parameter" />
+            <param name="StringToMatch" value="Parameter"/>
             <param name="AcceptOnMatch" value="false"/>
         </filter>
     </appender>
 
     <root>
-        <priority value ="WARN" />
-        <appender-ref ref="console" />
+        <priority value="WARN"/>
+        <appender-ref ref="console"/>
     </root>
 
 </log4j:configuration>

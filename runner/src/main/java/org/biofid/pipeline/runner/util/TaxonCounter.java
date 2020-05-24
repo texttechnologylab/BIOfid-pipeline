@@ -1,4 +1,4 @@
-package org.biofid.pipeline.util;
+package pipeline.util;
 
 import com.google.common.collect.Iterators;
 import org.apache.uima.analysis_engine.AnalysisEngineProcessException;

@@ -1,4 +1,4 @@
-package org.biofid.pipeline;
+package org.biofid.pipeline.runner;
 
 import de.tudarmstadt.ukp.dkpro.core.api.anomaly.type.Anomaly;
 import de.tudarmstadt.ukp.dkpro.core.api.metadata.type.DocumentMetaData;
