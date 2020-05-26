@@ -20,6 +20,7 @@
         <module>runner</module>
         <module>biofid-gazetteer</module>
         <module>uima-conll-export</module>
+        <module>deep-eos-uima</module>
     </modules>
 
     <repositories>

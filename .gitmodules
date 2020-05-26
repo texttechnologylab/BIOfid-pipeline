@@ -6,3 +6,7 @@
 	path = biofid-gazetteer
 	url = https://github.com/m-stoeckel/biofid-gazetteer
 	branch = master
+[submodule "deep-eos-uima"]
+	path = deep-eos-uima
+	url = https://github.com/m-stoeckel/deep-eos-uima
+	branch = master
