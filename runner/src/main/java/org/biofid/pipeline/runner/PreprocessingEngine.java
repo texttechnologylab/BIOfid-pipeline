@@ -19,7 +19,7 @@ import org.apache.uima.jcas.JCas;
 import org.apache.uima.jcas.tcas.Annotation;
 import org.apache.uima.resource.ResourceInitializationException;
 import org.biofid.deep_eos.DeepEosTagger;
-import org.biofid.gazetteer.UnicodeRegexSegmenter;
+import org.biofid.gazetteer.util.UnicodeRegexSegmenter;
 import org.dkpro.core.api.transform.alignment.AlignedString;
 import org.hucompute.textimager.uima.marmot.MarMoTLemma;
 import org.hucompute.textimager.uima.marmot.MarMoTTagger;

@@ -12,7 +12,7 @@ import org.apache.uima.fit.factory.CollectionReaderFactory;
 import org.apache.uima.fit.pipeline.SimplePipeline;
 import org.biofid.deep_eos.DeepEosTagger;
 import org.biofid.gazetteer.MultiClassTreeGazetteer;
-import org.biofid.gazetteer.UnicodeRegexSegmenter;
+import org.biofid.gazetteer.util.UnicodeRegexSegmenter;
 import org.dkpro.core.io.xmi.XmiReader;
 import org.dkpro.core.io.xmi.XmiWriter;
 import org.texttechnologylab.annotation.type.*;
