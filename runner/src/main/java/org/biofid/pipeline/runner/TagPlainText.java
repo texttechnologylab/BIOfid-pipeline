@@ -1,8 +1,8 @@
 package org.biofid.pipeline.runner;
 
+import de.tudarmstadt.ukp.dkpro.core.api.ner.type.NamedEntity;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.uima.UIMAException;
 import org.apache.uima.analysis_engine.AnalysisEngineDescription;
 import org.apache.uima.collection.CollectionReader;
@@ -11,7 +11,7 @@ import org.apache.uima.fit.factory.AnalysisEngineFactory;
 import org.apache.uima.fit.factory.CollectionReaderFactory;
 import org.apache.uima.fit.pipeline.SimplePipeline;
 import org.biofid.deep_eos.DeepEosTagger;
-import org.biofid.gazetteer.BIOfidTreeGazetteer;
+import org.biofid.gazetteer.MultiClassTreeGazetteer;
 import org.biofid.gazetteer.UnicodeRegexSegmenter;
 import org.dkpro.core.io.xmi.XmiReader;
 import org.dkpro.core.io.xmi.XmiWriter;
@@ -20,7 +20,9 @@ import org.texttechnologylab.uima.conll.extractor.OneClassPerColumnWriter;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import static java.lang.System.exit;
 
@@ -67,6 +69,16 @@ public class TagPlainText {
 		outputDirOption.setRequired(false);
 		options.addOption(outputDirOption);
 		
+		Option noPreProcessOption = new Option("nopre", false,
+				"If set, no pre-processing will be done.");
+		noPreProcessOption.setRequired(false);
+		options.addOption(noPreProcessOption);
+		
+		Option noTagOption = new Option("notag", false,
+				"If set, no tagging will be done.");
+		noTagOption.setRequired(false);
+		options.addOption(noTagOption);
+		
 		try {
 			DefaultParser defaultParser = new DefaultParser();
 			CommandLine commandLine = defaultParser.parse(options, args);
@@ -98,16 +110,6 @@ public class TagPlainText {
 			else
 				conllDir = commandLine.getOptionValue("o");
 			
-			Option noPreProcessOption = new Option("nopre", false,
-					"If set, no pre-processing will be done.");
-			noPreProcessOption.setRequired(false);
-			options.addOption(noPreProcessOption);
-			
-			Option noTagOption = new Option("notag", false,
-					"If set, no tagging will be done.");
-			noTagOption.setRequired(false);
-			options.addOption(noTagOption);
-			
 			if (!commandLine.hasOption("nopre"))
 				preProcess();
 			
@@ -116,7 +118,8 @@ public class TagPlainText {
 			
 			extractCoNLL();
 		} catch (ParseException e) {
-			printHelp(options);
+//			printHelp(options);
+			e.printStackTrace();
 			exit(-1);
 		}
 	}
@@ -170,27 +173,35 @@ public class TagPlainText {
 			);
 			AggregateBuilder aggregateBuilder = new AggregateBuilder();
 			
-			for (ImmutablePair<String, String> pair : Arrays.asList(
-					ImmutablePair.of("Archaea", Archaea.class.getName()),
-					ImmutablePair.of("Bacteria", Bacteria.class.getName()),
-					ImmutablePair.of("Chromista", Chromista.class.getName()),
-					ImmutablePair.of("Fungi", Fungi.class.getName()),
-//					ImmutablePair.of("Habitat", Habitat.class.getName()),
-					ImmutablePair.of("Lichen", Lichen.class.getName()),
-					ImmutablePair.of("Protozoa", Protozoa.class.getName()),
-					ImmutablePair.of("Viruses", Viruses.class.getName())
-			)) {
-				aggregateBuilder.add(
-						String.format("BIOfidTreeGazetteer[%s]", pair.left),
-						AnalysisEngineFactory.createEngineDescription(
-								BIOfidTreeGazetteer.class,
-								BIOfidTreeGazetteer.PARAM_SOURCE_LOCATION, classesDir + pair.left,
-								BIOfidTreeGazetteer.PARAM_TAGGING_TYPE_NAME, pair.right,
-								BIOfidTreeGazetteer.PARAM_USE_LOWERCASE, true,
-								BIOfidTreeGazetteer.PARAM_FILTER_LOCATION, classesDir + "vocab-5000.txt",
-								BIOfidTreeGazetteer.PARAM_USE_SENTECE_LEVEL_TAGGING, true
-						));
+			ArrayList<String> sourceLocations = new ArrayList<>();
+			ArrayList<String> typeNames = new ArrayList<>();
+			List<Class<? extends NamedEntity>> taggingClasses = Arrays.asList(
+					Archaea.class,
+					Bacteria.class,
+					Chromista.class,
+					Fungi.class,
+//					Habitat.class,
+					Lichen.class,
+					Protozoa.class,
+					Animal_Fauna.class,
+					Plant_Flora.class,
+					Taxon.class,
+					Viruses.class
+			);
+			for (Class<? extends NamedEntity> aClass : taggingClasses) {
+				sourceLocations.add(classesDir + aClass.getSimpleName());
+				typeNames.add(aClass.getName());
 			}
+			aggregateBuilder.add(
+					"MultiClassTreeGazetteer",
+					AnalysisEngineFactory.createEngineDescription(MultiClassTreeGazetteer.class,
+							MultiClassTreeGazetteer.PARAM_SOURCE_LOCATION, sourceLocations.toArray(new String[0]),
+							MultiClassTreeGazetteer.PARAM_CLASS_MAPPING, typeNames.toArray(new String[0]),
+							MultiClassTreeGazetteer.PARAM_USE_LOWERCASE, true,
+							MultiClassTreeGazetteer.PARAM_USE_STRING_TREE, true,
+							MultiClassTreeGazetteer.PARAM_FILTER_LOCATION, classesDir + "filter_words-de_en.txt",
+							MultiClassTreeGazetteer.PARAM_USE_SENTECE_LEVEL_TAGGING, true
+					));
 			new File(taggedDir).mkdirs();
 			aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(XmiWriter.class,
 					XmiWriter.PARAM_TARGET_LOCATION, taggedDir,
@@ -199,41 +210,6 @@ public class TagPlainText {
 					XmiWriter.PARAM_OVERWRITE, true
 			));
 			SimplePipeline.runPipeline(reader, aggregateBuilder.createAggregate());
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		/*
-		 * Single class tagging
-		 */
-		try {
-			for (ImmutablePair<String, String> pair : Arrays.asList(
-					ImmutablePair.of("Animal_Fauna", Animal_Fauna.class.getName()),
-					ImmutablePair.of("Plant_Flora", Plant_Flora.class.getName()),
-					ImmutablePair.of("Taxon", Taxon.class.getName())
-			)) {
-				final CollectionReader reader = CollectionReaderFactory.createReader(XmiReader.class,
-						XmiReader.PARAM_SOURCE_LOCATION, taggedDir,
-						XmiReader.PARAM_PATTERNS, xmiIncludePattern
-				);
-				AggregateBuilder aggregateBuilder = new AggregateBuilder();
-				aggregateBuilder.add(
-						String.format("BIOfidTreeGazetteer[%s]", pair.left),
-						AnalysisEngineFactory.createEngineDescription(
-								BIOfidTreeGazetteer.class,
-								BIOfidTreeGazetteer.PARAM_SOURCE_LOCATION, classesDir + pair.left,
-								BIOfidTreeGazetteer.PARAM_TAGGING_TYPE_NAME, pair.right,
-								BIOfidTreeGazetteer.PARAM_USE_LOWERCASE, true,
-								BIOfidTreeGazetteer.PARAM_FILTER_LOCATION, classesDir + "vocab-5000.txt",
-								BIOfidTreeGazetteer.PARAM_USE_SENTECE_LEVEL_TAGGING, true
-						));
-				aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(XmiWriter.class,
-						XmiWriter.PARAM_TARGET_LOCATION, taggedDir,
-						XmiWriter.PARAM_USE_DOCUMENT_ID, true,
-						XmiWriter.PARAM_PRETTY_PRINT, true,
-						XmiWriter.PARAM_OVERWRITE, true
-				));
-				SimplePipeline.runPipeline(reader, aggregateBuilder.createAggregate());
-			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

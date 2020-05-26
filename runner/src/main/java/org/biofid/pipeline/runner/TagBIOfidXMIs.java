@@ -3,12 +3,12 @@ package org.biofid.pipeline.runner;
 import com.google.common.collect.ImmutableSet;
 import de.tudarmstadt.ukp.dkpro.core.api.lexmorph.type.pos.POS;
 import de.tudarmstadt.ukp.dkpro.core.api.metadata.type.DocumentMetaData;
+import de.tudarmstadt.ukp.dkpro.core.api.ner.type.NamedEntity;
 import de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Lemma;
 import de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence;
 import de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Token;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.uima.UIMAException;
 import org.apache.uima.analysis_engine.AnalysisEngineDescription;
 import org.apache.uima.cas.impl.XmiCasSerializer;
@@ -20,7 +20,7 @@ import org.apache.uima.fit.util.JCasUtil;
 import org.apache.uima.flow.impl.FixedFlowController;
 import org.apache.uima.jcas.JCas;
 import org.apache.uima.jcas.tcas.Annotation;
-import org.biofid.gazetteer.BIOfidTreeGazetteer;
+import org.biofid.gazetteer.MultiClassTreeGazetteer;
 import org.dkpro.core.io.xmi.XmiReader;
 import org.dkpro.core.io.xmi.XmiWriter;
 import org.texttechnologylab.annotation.type.*;
@@ -30,7 +30,9 @@ import org.xml.sax.SAXException;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import static java.lang.System.exit;
 
@@ -181,30 +183,35 @@ public class TagBIOfidXMIs {
 			);
 			AggregateBuilder aggregateBuilder = new AggregateBuilder();
 			
-			for (ImmutablePair<String, String> pair : Arrays.asList(
-					ImmutablePair.of(Archaea.class.getSimpleName(), Archaea.class.getName()),
-					ImmutablePair.of(Bacteria.class.getSimpleName(), Bacteria.class.getName()),
-					ImmutablePair.of(Chromista.class.getSimpleName(), Chromista.class.getName()),
-					ImmutablePair.of(Fungi.class.getSimpleName(), Fungi.class.getName()),
-//					ImmutablePair.of(Habitat.class.getSimpleName(), Habitat.class.getName()),
-					ImmutablePair.of(Lichen.class.getSimpleName(), Lichen.class.getName()),
-					ImmutablePair.of(Protozoa.class.getSimpleName(), Protozoa.class.getName()),
-					ImmutablePair.of(Animal_Fauna.class.getSimpleName(), Animal_Fauna.class.getName()),
-					ImmutablePair.of(Plant_Flora.class.getSimpleName(), Plant_Flora.class.getName()),
-					ImmutablePair.of(Taxon.class.getSimpleName(), Taxon.class.getName()),
-					ImmutablePair.of(Viruses.class.getSimpleName(), Viruses.class.getName())
-			)) {
-				aggregateBuilder.add(
-						String.format("BIOfidTreeGazetteer[%s]", pair.left),
-						AnalysisEngineFactory.createEngineDescription(BIOfidTreeGazetteer.class,
-								BIOfidTreeGazetteer.PARAM_SOURCE_LOCATION, classesDir + pair.left,
-								BIOfidTreeGazetteer.PARAM_TAGGING_TYPE_NAME, pair.right,
-								BIOfidTreeGazetteer.PARAM_USE_LOWERCASE, true,
-								BIOfidTreeGazetteer.PARAM_USE_STRING_TREE, true,
-								BIOfidTreeGazetteer.PARAM_FILTER_LOCATION, classesDir + "vocab-5000.txt",
-								BIOfidTreeGazetteer.PARAM_USE_SENTECE_LEVEL_TAGGING, true
-						));
+			ArrayList<String> sourceLocations = new ArrayList<>();
+			ArrayList<String> typeNames = new ArrayList<>();
+			List<Class<? extends NamedEntity>> taggingClasses = Arrays.asList(
+					Archaea.class,
+					Bacteria.class,
+					Chromista.class,
+					Fungi.class,
+//					Habitat.class,
+					Lichen.class,
+					Protozoa.class,
+					Animal_Fauna.class,
+					Plant_Flora.class,
+					Taxon.class,
+					Viruses.class
+			);
+			for (Class<? extends NamedEntity> aClass : taggingClasses) {
+				sourceLocations.add(classesDir + aClass.getSimpleName());
+				typeNames.add(aClass.getName());
 			}
+			aggregateBuilder.add(
+					"MultiClassTreeGazetteer",
+					AnalysisEngineFactory.createEngineDescription(MultiClassTreeGazetteer.class,
+							MultiClassTreeGazetteer.PARAM_SOURCE_LOCATION, sourceLocations.toArray(new String[0]),
+							MultiClassTreeGazetteer.PARAM_CLASS_MAPPING, typeNames.toArray(new String[0]),
+							MultiClassTreeGazetteer.PARAM_USE_LOWERCASE, true,
+							MultiClassTreeGazetteer.PARAM_USE_STRING_TREE, true,
+							MultiClassTreeGazetteer.PARAM_FILTER_LOCATION, classesDir + "vocab-5000.txt",
+							MultiClassTreeGazetteer.PARAM_USE_SENTECE_LEVEL_TAGGING, true
+					));
 			new File(taggedDir).mkdirs();
 			aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(XmiWriter.class,
 					XmiWriter.PARAM_TARGET_LOCATION, taggedDir,
