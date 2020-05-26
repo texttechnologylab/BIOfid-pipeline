@@ -3,6 +3,7 @@ package org.biofid.pipeline.runner;
 import de.tudarmstadt.ukp.dkpro.core.api.anomaly.type.Anomaly;
 import de.tudarmstadt.ukp.dkpro.core.api.metadata.type.DocumentMetaData;
 import de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Token;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.uima.UIMAException;
 import org.apache.uima.UimaContext;
 import org.apache.uima.analysis_engine.AnalysisEngine;
@@ -10,19 +11,21 @@ import org.apache.uima.analysis_engine.AnalysisEngineProcessException;
 import org.apache.uima.cas.AbstractCas;
 import org.apache.uima.fit.component.JCasMultiplier_ImplBase;
 import org.apache.uima.fit.descriptor.ConfigurationParameter;
+import org.apache.uima.fit.factory.AggregateBuilder;
 import org.apache.uima.fit.factory.AnalysisEngineFactory;
-import org.apache.uima.fit.factory.JCasFactory;
 import org.apache.uima.fit.pipeline.SimplePipeline;
 import org.apache.uima.fit.util.JCasUtil;
 import org.apache.uima.jcas.JCas;
 import org.apache.uima.jcas.tcas.Annotation;
 import org.apache.uima.resource.ResourceInitializationException;
 import org.biofid.deep_eos.DeepEosTagger;
-import org.dkpro.core.tokit.RegexSegmenter;
+import org.biofid.gazetteer.UnicodeRegexSegmenter;
+import org.dkpro.core.api.transform.alignment.AlignedString;
 import org.hucompute.textimager.uima.marmot.MarMoTLemma;
 import org.hucompute.textimager.uima.marmot.MarMoTTagger;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.stream.Collectors;
 
@@ -30,45 +33,47 @@ public class PreprocessingEngine extends JCasMultiplier_ImplBase {
 	
 	private static final String CONDA_PREFIX = System.getenv("HOME") + "/anaconda3/";
 	
+	/**
+	 * The file path to the MarMoT model. If none is given, lemmatization and POS tagging will be disabled.
+	 */
 	public static final String PARAM_MARMOT_MODEL_LOCATION = "pParamMarmotModelLocation";
-	@ConfigurationParameter(name = PARAM_MARMOT_MODEL_LOCATION)
+	@ConfigurationParameter(name = PARAM_MARMOT_MODEL_LOCATION, mandatory = false)
 	private String pParamMarmotModelLocation;
 	
-	private AnalysisEngine regexSegmenter;
-	private AnalysisEngine deepEosTagger;
-	private AnalysisEngine marMoTTagger;
-	private AnalysisEngine marMoTLemma;
 	private JCas outputCas;
+	private AnalysisEngine analysisEngine;
 	
 	@Override
 	public void initialize(UimaContext context) throws ResourceInitializationException {
 		super.initialize(context);
 		
 		try {
-			outputCas = JCasFactory.createJCas();
+			AggregateBuilder aggregateBuilder = new AggregateBuilder();
 			getLogger().info("Creating RegexSegmenter");
-			regexSegmenter = AnalysisEngineFactory.createEngine(RegexSegmenter.class,
-					RegexSegmenter.PARAM_TOKEN_BOUNDARY_REGEX, "[^\\p{Alnum}-]+",
-					RegexSegmenter.PARAM_WRITE_SENTENCE, false,
-					RegexSegmenter.PARAM_WRITE_TOKEN, true,
-					RegexSegmenter.PARAM_WRITE_FORM, false
-			);
+			aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(UnicodeRegexSegmenter.class,
+					UnicodeRegexSegmenter.PARAM_WRITE_SENTENCE, false,
+					UnicodeRegexSegmenter.PARAM_WRITE_TOKEN, true,
+					UnicodeRegexSegmenter.PARAM_WRITE_FORM, false
+			));
 			getLogger().info("Creating Deep-EOS Tagger");
-			deepEosTagger = AnalysisEngineFactory.createEngine(DeepEosTagger.class,
-					DeepEosTagger.PARAM_MODEL_NAME, "biofid",
+			aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(DeepEosTagger.class,
+					DeepEosTagger.PARAM_MODEL_NAME, "de-wiki",
 					DeepEosTagger.PARAM_PYTHON_HOME, CONDA_PREFIX + "envs/keras",
 					DeepEosTagger.PARAM_LIBJEP_PATH, CONDA_PREFIX + "envs/keras/lib/python3.7/site-packages/jep/libjep.so"
-			);
-			getLogger().info("Creating MarMoT POS Tagger");
-			marMoTTagger = AnalysisEngineFactory.createEngine(MarMoTTagger.class,
-					MarMoTTagger.PARAM_LANGUAGE, "de",
-					MarMoTTagger.PARAM_MODEL_LOCATION, pParamMarmotModelLocation
-			);
-			getLogger().info("Creating MarMoT Lemma Tagger");
-			marMoTLemma = AnalysisEngineFactory.createEngine(MarMoTLemma.class,
-					MarMoTLemma.PARAM_LANGUAGE, "de",
-					MarMoTLemma.PARAM_MODEL_LOCATION, pParamMarmotModelLocation
-			);
+			));
+			if (StringUtils.isNotEmpty(pParamMarmotModelLocation)) {
+				getLogger().info("Creating MarMoT POS Tagger");
+				aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(MarMoTTagger.class,
+						MarMoTTagger.PARAM_LANGUAGE, "de",
+						MarMoTTagger.PARAM_MODEL_LOCATION, pParamMarmotModelLocation
+				));
+				getLogger().info("Creating MarMoT Lemma Tagger");
+				aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(MarMoTLemma.class,
+						MarMoTLemma.PARAM_LANGUAGE, "de",
+						MarMoTLemma.PARAM_MODEL_LOCATION, pParamMarmotModelLocation
+				));
+			}
+			analysisEngine = aggregateBuilder.createAggregate();
 			getLogger().info("Finished initialization");
 		} catch (UIMAException e) {
 			throw new ResourceInitializationException(e);
@@ -94,12 +99,33 @@ public class PreprocessingEngine extends JCasMultiplier_ImplBase {
 	public void process(JCas inputCas) throws AnalysisEngineProcessException {
 		outputCas = getEmptyJCas();
 		
-		HashSet<Token> annomalyTokens = JCasUtil.indexCovered(inputCas, Anomaly.class, Token.class).values().stream().flatMap(Collection::stream).collect(Collectors.toCollection(HashSet::new));
-		String cleanedDocumentText = JCasUtil.select(inputCas, Token.class).stream()
-				.sequential()
-				.filter(o -> !annomalyTokens.contains(o))
-				.map(Annotation::getCoveredText)
-				.collect(Collectors.joining(" "));
+		String cleanedDocumentText;
+		if (true) {
+			final String documentText = inputCas.getDocumentText();
+			AlignedString alignedString = new AlignedString(documentText);
+			JCasUtil.select(inputCas, Anomaly.class)
+					.stream().sorted(Comparator.comparingInt(Anomaly::getBegin).reversed())
+					.sequential()
+					.forEach(
+							anomaly -> {
+								int begin = anomaly.getBegin();
+								int end = anomaly.getEnd();
+								if (begin <= documentText.length() && end <= documentText.length())
+									alignedString.delete(begin, end);
+							}
+					);
+			cleanedDocumentText = alignedString.get();
+		} else {
+			HashSet<Token> annomalyTokens = JCasUtil.indexCovered(inputCas, Anomaly.class, Token.class).values().stream().flatMap(Collection::stream).collect(Collectors.toCollection(HashSet::new));
+			JCasUtil.indexCovered(inputCas, Token.class, Token.class).values().stream().flatMap(Collection::stream).forEach(annomalyTokens::add);
+			cleanedDocumentText = JCasUtil.select(inputCas, Token.class).stream()
+					.sequential()
+					.filter(o -> !annomalyTokens.contains(o))
+					.map(Annotation::getCoveredText)
+					.map(String::trim)
+					.filter(StringUtils::isNotEmpty)
+					.collect(Collectors.joining(" "));
+		}
 		
 		outputCas.setDocumentText(cleanedDocumentText);
 		outputCas.setDocumentLanguage(inputCas.getDocumentLanguage());
@@ -107,6 +133,6 @@ public class PreprocessingEngine extends JCasMultiplier_ImplBase {
 		DocumentMetaData documentMetaData = DocumentMetaData.get(outputCas);
 		documentMetaData.setCollectionId("BIOfid_Corpus-preprocessed");
 		
-		SimplePipeline.runPipeline(outputCas, deepEosTagger, regexSegmenter, marMoTTagger, marMoTLemma);
+		SimplePipeline.runPipeline(outputCas, analysisEngine);
 	}
 }

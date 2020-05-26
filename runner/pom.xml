@@ -154,25 +154,6 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>com.github.m-stoeckel</groupId>
-            <artifactId>deep-eos-uima</artifactId>
-            <version>1.1.4</version>
-            <exclusions>
-                <exclusion>
-                    <artifactId>Utilities</artifactId>
-                    <groupId>com.github.texttechnologylab</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>UIMATypeSystem</artifactId>
-                    <groupId>com.github.texttechnologylab</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>guava</artifactId>
-                    <groupId>com.google.guava</groupId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
             <version>3.4</version>
@@ -193,6 +174,12 @@
             <groupId>org.texttechnologylab</groupId>
             <artifactId>uima-conll-export</artifactId>
             <version>0.1.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.texttechnologylab.textimager-uima</groupId>
+            <artifactId>textimager-uima-deep-eos</artifactId>
+            <version>1.1.5</version>
             <scope>compile</scope>
         </dependency>
     </dependencies>
