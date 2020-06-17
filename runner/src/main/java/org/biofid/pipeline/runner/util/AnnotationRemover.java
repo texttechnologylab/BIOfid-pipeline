@@ -1,4 +1,4 @@
-package pipeline.util;
+package org.biofid.pipeline.runner.util;
 
 import org.apache.uima.UimaContext;
 import org.apache.uima.analysis_engine.AnalysisEngineProcessException;
@@ -51,7 +51,7 @@ public class AnnotationRemover extends JCasAnnotator_ImplBase {
 		try {
 			Integer i = jCasIndexMap.get(pRemoveAnnotation);
 			if (i == null) {
-				getLogger().info("Type not found in JCasRegistry, falling back to Class.forName");
+				getLogger().debug("Type not found in JCasRegistry, falling back to Class.forName");
 				JCasUtil.select(aJCas, Class.forName(pRemoveAnnotation).asSubclass(TOP.class)).forEach(
 						aJCas::removeFsFromIndexes
 				);

@@ -21,9 +21,11 @@ import org.apache.uima.flow.impl.FixedFlowController;
 import org.apache.uima.jcas.JCas;
 import org.apache.uima.jcas.tcas.Annotation;
 import org.biofid.gazetteer.MultiClassTreeGazetteer;
+import org.biofid.gazetteer.SingleClassTreeGazetteer;
 import org.dkpro.core.io.xmi.XmiReader;
 import org.dkpro.core.io.xmi.XmiWriter;
 import org.texttechnologylab.annotation.type.*;
+import org.texttechnologylab.uima.conll.extractor.ConllBIO2003Writer;
 import org.texttechnologylab.uima.conll.extractor.OneClassPerColumnWriter;
 import org.xml.sax.SAXException;
 
@@ -95,6 +97,11 @@ public class TagBIOfidXMIs {
 		noTagOption.setRequired(false);
 		options.addOption(noTagOption);
 		
+		Option singleTagOption = new Option("single", false,
+				"If set, will only tag Taxon.");
+		singleTagOption.setRequired(false);
+		options.addOption(singleTagOption);
+		
 		try {
 			DefaultParser defaultParser = new DefaultParser();
 			CommandLine commandLine = defaultParser.parse(options, args);
@@ -131,10 +138,15 @@ public class TagBIOfidXMIs {
 			if (!commandLine.hasOption("nopre"))
 				preProcess();
 			
-			if (!commandLine.hasOption("notag"))
-				tagTaxa();
+			if (!commandLine.hasOption("notag")) {
+				if (commandLine.hasOption("single")) {
+					tagTaxaSingle();
+				} else {
+					tagTaxa();
+				}
+			}
 			
-			extractCoNLL();
+			extractCoNLL(commandLine.hasOption("single"));
 		} catch (ParseException e) {
 			printHelp(options);
 			exit(-1);
@@ -225,25 +237,88 @@ public class TagBIOfidXMIs {
 		}
 	}
 	
-	private static void extractCoNLL() {
+	private static void tagTaxaSingle() {
+		try {
+			final CollectionReader reader = CollectionReaderFactory.createReader(XmiReader.class,
+					XmiReader.PARAM_SOURCE_LOCATION, cleanDir,
+					XmiReader.PARAM_PATTERNS, fileIncludePattern
+			);
+			AggregateBuilder aggregateBuilder = new AggregateBuilder();
+			
+			ArrayList<String> sourceLocations = new ArrayList<>();
+			List<Class<? extends NamedEntity>> taggingClasses = Arrays.asList(
+					Archaea.class,
+					Bacteria.class,
+					Chromista.class,
+					Fungi.class,
+//					Habitat.class,
+					Lichen.class,
+					Protozoa.class,
+					Animal_Fauna.class,
+					Plant_Flora.class,
+					Taxon.class,
+					Viruses.class
+			);
+			for (Class<? extends NamedEntity> aClass : taggingClasses) {
+				sourceLocations.add(classesDir + aClass.getSimpleName());
+			}
+			aggregateBuilder.add(
+					"SingleClassTreeGazetteer",
+					AnalysisEngineFactory.createEngineDescription(SingleClassTreeGazetteer.class,
+							SingleClassTreeGazetteer.PARAM_SOURCE_LOCATION, sourceLocations.toArray(new String[0]),
+							SingleClassTreeGazetteer.PARAM_TAGGING_TYPE_NAME, Taxon.class.getName(),
+							SingleClassTreeGazetteer.PARAM_USE_LOWERCASE, true,
+							SingleClassTreeGazetteer.PARAM_USE_STRING_TREE, true,
+							SingleClassTreeGazetteer.PARAM_FILTER_LOCATION, classesDir + "filter_words-de_en.txt",
+							SingleClassTreeGazetteer.PARAM_USE_SENTECE_LEVEL_TAGGING, true
+					));
+			new File(taggedDir).mkdirs();
+			aggregateBuilder.add(AnalysisEngineFactory.createEngineDescription(XmiWriter.class,
+					XmiWriter.PARAM_TARGET_LOCATION, taggedDir,
+					XmiWriter.PARAM_USE_DOCUMENT_ID, true,
+					XmiWriter.PARAM_PRETTY_PRINT, true,
+					XmiWriter.PARAM_OVERWRITE, true
+			));
+			SimplePipeline.runPipeline(reader, aggregateBuilder.createAggregate());
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private static void extractCoNLL(boolean single) {
 		try {
 			final CollectionReader reader = CollectionReaderFactory.createReader(XmiReader.class,
 					XmiReader.PARAM_SOURCE_LOCATION, taggedDir,
 					XmiReader.PARAM_PATTERNS, fileIncludePattern
 			);
-			AnalysisEngineDescription oneClassPerColumnWriter = AnalysisEngineFactory.createEngineDescription(OneClassPerColumnWriter.class,
-					OneClassPerColumnWriter.PARAM_TARGET_LOCATION, conllDir,
-					OneClassPerColumnWriter.PARAM_OVERWRITE, true,
-					OneClassPerColumnWriter.PARAM_USE_TTLAB_TYPESYSTEM, true,
-					OneClassPerColumnWriter.PARAM_USE_TTLAB_CONLL_FEATURES, false,
-					OneClassPerColumnWriter.PARAM_FILTER_FINGERPRINTED, false,
-					OneClassPerColumnWriter.PARAM_REMOVE_DUPLICATES_SAME_TYPE, false,
-					OneClassPerColumnWriter.PARAM_MERGE_VIEWS, false,
-					OneClassPerColumnWriter.PARAM_MIN_VIEWS, 0,
-					OneClassPerColumnWriter.PARAM_FILTER_EMPTY_SENTENCES, true,
-					OneClassPerColumnWriter.PARAM_ONLY_PRINT_PRESENT, false
-			);
-			SimplePipeline.runPipeline(reader, oneClassPerColumnWriter);
+			AnalysisEngineDescription conllWriter;
+			if (single) {
+				conllWriter = AnalysisEngineFactory.createEngineDescription(ConllBIO2003Writer.class,
+						ConllBIO2003Writer.PARAM_TARGET_LOCATION, conllDir,
+						ConllBIO2003Writer.PARAM_OVERWRITE, true,
+						ConllBIO2003Writer.PARAM_USE_TTLAB_TYPESYSTEM, true,
+						ConllBIO2003Writer.PARAM_USE_TTLAB_CONLL_FEATURES, false,
+						ConllBIO2003Writer.PARAM_FILTER_FINGERPRINTED, false,
+						ConllBIO2003Writer.PARAM_REMOVE_DUPLICATES_SAME_TYPE, false,
+						ConllBIO2003Writer.PARAM_MERGE_VIEWS, false,
+						ConllBIO2003Writer.PARAM_MIN_VIEWS, 0,
+						ConllBIO2003Writer.PARAM_FILTER_EMPTY_SENTENCES, true
+				);
+			} else {
+				conllWriter = AnalysisEngineFactory.createEngineDescription(OneClassPerColumnWriter.class,
+						OneClassPerColumnWriter.PARAM_TARGET_LOCATION, conllDir,
+						OneClassPerColumnWriter.PARAM_OVERWRITE, true,
+						OneClassPerColumnWriter.PARAM_USE_TTLAB_TYPESYSTEM, true,
+						OneClassPerColumnWriter.PARAM_USE_TTLAB_CONLL_FEATURES, false,
+						OneClassPerColumnWriter.PARAM_FILTER_FINGERPRINTED, false,
+						OneClassPerColumnWriter.PARAM_REMOVE_DUPLICATES_SAME_TYPE, false,
+						OneClassPerColumnWriter.PARAM_MERGE_VIEWS, false,
+						OneClassPerColumnWriter.PARAM_MIN_VIEWS, 0,
+						OneClassPerColumnWriter.PARAM_FILTER_EMPTY_SENTENCES, true,
+						OneClassPerColumnWriter.PARAM_ONLY_PRINT_PRESENT, false
+				);
+			}
+			SimplePipeline.runPipeline(reader, conllWriter);
 		} catch (UIMAException | IOException e) {
 			e.printStackTrace();
 		}
